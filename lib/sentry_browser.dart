@@ -5,47 +5,66 @@
 /// A pure Dart client for Sentry.io crash reporting.
 library sentry_browser;
 
-import 'dart:async';
+import 'dart:html' hide Event, Client;
+
 import 'package:http/http.dart';
 import 'package:meta/meta.dart';
 import 'package:quiver/time.dart';
 
-import 'src/version.dart';
 import 'src/base.dart';
+import 'src/version.dart';
 
 export 'src/version.dart';
+export 'src/base.dart';
 
 /// Logs crash reports and events to the Sentry.io service.
-class SentryClientBrowser extends SentryClient {
-  factory SentryClientBrowser({
-    @required String dsn,
-    Event environmentAttributes,
-    Client httpClient,
-    Clock clock,
-    UuidGenerator uuidGenerator,
-  }) =>
-      new SentryClient(
-          dsn: dsn,
-          httpClient: httpClient,
-          clock: clock,
-          uuidGenerator: uuidGenerator,
-          environmentAttributes: environmentAttributes);
+class SentryBrowserClient extends SentryClientBase {
+  String get publicKey => _publicKey;
+  String _publicKey;
+
+  String get secretKey => null;
+
+  String get projectId => _projectId;
+  String _projectId;
+
+  SentryBrowserClient(
+      {@required String dsn,
+      Event environmentAttributes,
+      Client httpClient,
+      Clock clock,
+      UuidGenerator uuidGenerator})
+      : super(
+            dsn: dsn,
+            uuidGenerator: generateUuidV4WithoutDashes,
+            environmentAttributes: environmentAttributes,
+            httpClient: httpClient ?? new Client(),
+            clock: clock ?? const Clock(getUtcDateTime),
+            compressPayload: false,
+            platform: jsPlatform);
 
   @override
-  Map<String, String> get sentryHeaders {
-    final headers = super.sentryHeaders;
-    headers.remove('User-Agent');
-    return headers;
+  Uri parseDSN(String dsn) {
+    final Uri uri = Uri.parse(dsn);
+    final List<String> userInfo = uri.userInfo.split(':');
+
+    _publicKey = userInfo.first;
+    _projectId = uri.pathSegments.last;
+
+    assert(() {
+      if (userInfo.length > 1)
+        throw new ArgumentError(
+            'Do not specify your secret key in the DSN: $dsn');
+
+      if (uri.pathSegments.isEmpty)
+        throw new ArgumentError(
+            'Project ID not found in the URI path of the DSN URI: $dsn');
+
+      return true;
+    }());
+    return uri;
   }
 
-  /// Reports the [exception] and optionally its [stackTrace] to Sentry.io.
   @override
-  Future<SentryResponse> captureException({
-    @required dynamic exception,
-    dynamic stackTrace,
-  }) {
-    final Event event = new Event(
-        exception: exception, stackTrace: stackTrace, platform: jsPlatform);
-    return capture(event: event);
-  }
+  Map<String, String> get httpHeaders =>
+      {'User-Agent': window.navigator.userAgent};
 }

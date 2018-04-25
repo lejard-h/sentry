@@ -1,5 +1,10 @@
 # package:sentry changelog
 
+## 2.1.0
+
+- Use SentryClient for server/flutter apps
+- Use SentryBrowserClient for Browser apps
+
 ## 2.0.0
 
 - Fixed deprecation warnings for Dart 2

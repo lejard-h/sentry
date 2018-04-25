@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// A pure Dart client for Sentry.io crash reporting.
+library sentry;
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -16,13 +19,43 @@ import 'utils.dart';
 import 'version.dart';
 
 /// Logs crash reports and events to the Sentry.io service.
-class SentryClient {
+abstract class SentryClientBase {
   /// Sentry.io client identifier for _this_ client.
-  @visibleForTesting
   static const String sentryClient = '$sdkName/$sdkVersion';
 
   /// The default logger name used if no other value is supplied.
   static const String defaultLoggerName = 'SentryClient';
+
+  final Client _httpClient;
+  final Clock _clock;
+  Clock get clock => _clock;
+  final UuidGenerator _uuidGenerator;
+
+  /// Contains [Event] attributes that are automatically mixed into all events
+  /// captured through this client.
+  ///
+  /// This event is designed to contain static values that do not change from
+  /// event to event, such as local operating system version, the version of
+  /// Dart/Flutter SDK, etc. These attributes have lower precedence than those
+  /// supplied in the even passed to [capture].
+  final Event environmentAttributes;
+
+  /// Whether to compress payloads sent to Sentry.io.
+  final bool compressPayload;
+
+  /// The DSN URI.
+  Uri get dsnUri => _dsnUri;
+  Uri _dsnUri;
+
+  /// The Sentry.io public key for the project.
+  String get publicKey;
+
+  /// The ID issued by Sentry.io to your project.
+  ///
+  /// Attached to the event payload.
+  String get projectId;
+
+  final String platform;
 
   /// Instantiates a client using [dsn] issued to your project by Sentry.io as
   /// the endpoint for submitting events.
@@ -46,118 +79,27 @@ class SentryClient {
   /// If [uuidGenerator] is provided, it is used to generate the "event_id"
   /// field instead of the built-in random UUID v4 generator. This is useful in
   /// tests.
-  factory SentryClient({
-    @required String dsn,
-    Event environmentAttributes,
-    bool compressPayload,
-    Client httpClient,
-    Clock clock,
-    UuidGenerator uuidGenerator,
-  }) {
-    httpClient ??= new Client();
-    clock ??= const Clock(_getUtcDateTime);
-    uuidGenerator ??= _generateUuidV4WithoutDashes;
-    compressPayload ??= true;
-
-    final Uri uri = Uri.parse(dsn);
-    final List<String> userInfo = uri.userInfo.split(':');
-
-    assert(() {
-      if (userInfo.length != 2)
-        throw new ArgumentError(
-            'Colon-separated publicKey:secretKey pair not found in the user info field of the DSN URI: $dsn');
-
-      if (uri.pathSegments.isEmpty)
-        throw new ArgumentError(
-            'Project ID not found in the URI path of the DSN URI: $dsn');
-
-      return true;
-    }());
-
-    final String publicKey = userInfo.first;
-    final String secretKey = userInfo.last;
-    final String projectId = uri.pathSegments.last;
-
-    return new SentryClient._(
-      httpClient: httpClient,
-      clock: clock,
-      uuidGenerator: uuidGenerator,
-      environmentAttributes: environmentAttributes,
-      dsnUri: uri,
-      publicKey: publicKey,
-      secretKey: secretKey,
-      projectId: projectId,
-      compressPayload: compressPayload,
-    );
-  }
-
-  SentryClient._({
+  SentryClientBase({
     @required Client httpClient,
     @required Clock clock,
     @required UuidGenerator uuidGenerator,
+    @required String dsn,
     @required this.environmentAttributes,
-    @required this.dsnUri,
-    @required this.publicKey,
-    @required this.secretKey,
     @required this.compressPayload,
-    @required this.projectId,
+    this.platform: sdkPlatform,
   })  : _httpClient = httpClient,
         _clock = clock,
-        _uuidGenerator = uuidGenerator;
-
-  final Client _httpClient;
-  final Clock _clock;
-  final UuidGenerator _uuidGenerator;
-
-  /// Contains [Event] attributes that are automatically mixed into all events
-  /// captured through this client.
-  ///
-  /// This event is designed to contain static values that do not change from
-  /// event to event, such as local operating system version, the version of
-  /// Dart/Flutter SDK, etc. These attributes have lower precedence than those
-  /// supplied in the even passed to [capture].
-  final Event environmentAttributes;
-
-  /// Whether to compress payloads sent to Sentry.io.
-  final bool compressPayload;
-
-  /// The DSN URI.
-  @visibleForTesting
-  final Uri dsnUri;
-
-  /// The Sentry.io public key for the project.
-  @visibleForTesting
-  final String publicKey;
-
-  /// The Sentry.io secret key for the project.
-  @visibleForTesting
-  final String secretKey;
-
-  /// The ID issued by Sentry.io to your project.
-  ///
-  /// Attached to the event payload.
-  final String projectId;
+        _uuidGenerator = uuidGenerator {
+    _dsnUri = parseDSN(dsn);
+  }
 
   @visibleForTesting
   String get postUri =>
       '${dsnUri.scheme}://${dsnUri.host}/api/$projectId/store/';
 
-  Map<String, String> get sentryHeaders {
-    final DateTime now = _clock.now();
-    return <String, String>{
-      'User-Agent': '$sentryClient',
-      'Content-Type': 'application/json',
-      'X-Sentry-Auth': 'Sentry sentry_version=6, '
-          'sentry_client=$sentryClient, '
-          'sentry_timestamp=${now.millisecondsSinceEpoch}, '
-          'sentry_key=$publicKey, '
-          'sentry_secret=$secretKey',
-    };
-  }
-
   /// Reports an [event] to Sentry.io.
   Future<SentryResponse> capture({@required Event event}) async {
-    final Map<String, String> headers = sentryHeaders;
+    final headers = httpHeaders;
 
     final Map<String, dynamic> data = <String, dynamic>{
       'project': projectId,
@@ -178,7 +120,7 @@ class SentryClient {
     }
 
     final Response response =
-        await _httpClient.post(postUri, headers: headers, body: body);
+    await _httpClient.post(postUri, headers: headers, body: body);
 
     if (response.statusCode != 200) {
       String errorMessage =
@@ -198,9 +140,7 @@ class SentryClient {
     dynamic stackTrace,
   }) {
     final Event event = new Event(
-      exception: exception,
-      stackTrace: stackTrace,
-    );
+        exception: exception, stackTrace: stackTrace, platform: platform);
     return capture(event: event);
   }
 
@@ -209,7 +149,11 @@ class SentryClient {
   }
 
   @override
-  String toString() => '$SentryClient("$postUri")';
+  String toString() => '$SentryClientBase("$postUri")';
+
+  Uri parseDSN(String dsn);
+
+  Map<String, String> get httpHeaders;
 }
 
 /// A response from Sentry.io.
@@ -239,7 +183,7 @@ class SentryResponse {
 
 typedef UuidGenerator = String Function();
 
-String _generateUuidV4WithoutDashes() =>
+String generateUuidV4WithoutDashes() =>
     new Uuid().generateV4().replaceAll('-', '');
 
 /// Severity of the logged [Event].
@@ -259,7 +203,7 @@ class SeverityLevel {
 
 /// Sentry does not take a timezone and instead expects the date-time to be
 /// submitted in UTC timezone.
-DateTime _getUtcDateTime() => new DateTime.now().toUtc();
+DateTime getUtcDateTime() => new DateTime.now().toUtc();
 
 /// An event to be reported to Sentry.io.
 @immutable
@@ -273,18 +217,18 @@ class Event {
   /// Creates an event.
   const Event(
       {this.loggerName,
-      this.serverName,
-      this.release,
-      this.environment,
-      this.message,
-      this.exception,
-      this.stackTrace,
-      this.level,
-      this.culprit,
-      this.tags,
-      this.extra,
-      this.fingerprint,
-      this.platform: sdkPlatform});
+        this.serverName,
+        this.release,
+        this.environment,
+        this.message,
+        this.exception,
+        this.stackTrace,
+        this.level,
+        this.culprit,
+        this.tags,
+        this.extra,
+        this.fingerprint,
+        this.platform});
 
   /// The logger that logged the event.
   final String loggerName;
@@ -345,7 +289,7 @@ class Event {
   ///     var supplemented = [Event.defaultFingerprint, 'foo'];
   final List<String> fingerprint;
 
-  /// either dart or javascript
+  /// 'dart' of 'javascript'
   final String platform;
 
   /// Serializes this event to JSON.

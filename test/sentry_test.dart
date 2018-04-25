@@ -73,7 +73,7 @@ void main() {
         'User-Agent': '$sdkName/$sdkVersion',
         'Content-Type': 'application/json',
         'X-Sentry-Auth': 'Sentry sentry_version=6, '
-            'sentry_client=${SentryClient.sentryClient}, '
+            'sentry_client=${SentryClientBase.sentryClient}, '
             'sentry_timestamp=${fakeClock
             .now()
             .millisecondsSinceEpoch}, '
@@ -113,7 +113,7 @@ void main() {
           {'type': 'ArgumentError', 'value': 'Invalid argument(s): Test error'}
         ],
         'sdk': {'version': sdkVersion, 'name': 'dart'},
-        'logger': SentryClient.defaultLoggerName,
+        'logger': SentryClientBase.defaultLoggerName,
         'server_name': 'test.server.com',
         'release': '1.2.3',
         'environment': 'staging',
