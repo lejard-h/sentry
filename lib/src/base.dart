@@ -93,7 +93,6 @@ abstract class SentryClientBase {
     _dsnUri = parseDSN(dsn);
   }
 
-  @visibleForTesting
   String get postUri =>
       '${dsnUri.scheme}://${dsnUri.host}/api/$projectId/store/';
 

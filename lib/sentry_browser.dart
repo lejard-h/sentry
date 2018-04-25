@@ -22,7 +22,8 @@ class SentryBrowserClient extends SentryClientBase {
   String get publicKey => _publicKey;
   String _publicKey;
 
-  String get secretKey => null;
+  String get secretKey => _secretKey;
+  String _secretKey;
 
   String get projectId => _projectId;
   String _projectId;
@@ -48,13 +49,13 @@ class SentryBrowserClient extends SentryClientBase {
     final List<String> userInfo = uri.userInfo.split(':');
 
     _publicKey = userInfo.first;
+    if (userInfo.length == 2) {
+      _secretKey = userInfo.last;
+    }
+
     _projectId = uri.pathSegments.last;
 
     assert(() {
-      if (userInfo.length > 1)
-        throw new ArgumentError(
-            'Do not specify your secret key in the DSN: $dsn');
-
       if (uri.pathSegments.isEmpty)
         throw new ArgumentError(
             'Project ID not found in the URI path of the DSN URI: $dsn');
@@ -67,4 +68,30 @@ class SentryBrowserClient extends SentryClientBase {
   @override
   Map<String, String> get httpHeaders =>
       {'User-Agent': window.navigator.userAgent};
+
+  @override
+  String get postUri {
+    final url = super.postUri;
+
+    final auth = {
+      'sentry_version': sentryVersion,
+      'sentry_client': SentryClientBase.sentryClient,
+      'sentry_key': publicKey
+    };
+
+    if (secretKey != null) {
+      auth['sentry_secret'] = secretKey;
+    }
+
+    // Auth is intentionally sent as part of query string (NOT as custom HTTP header) to avoid preflight CORS requests (from Raven-js src)
+    return '$url?${_urlencode(auth)}';
+  }
+
+  String _urlencode(Map<String, String> params) {
+    var pairs = [];
+    params.forEach((key, value) {
+      pairs.add('${Uri.encodeComponent(key)}=${Uri.encodeComponent(value)}');
+    });
+    return pairs.join('&');
+  }
 }

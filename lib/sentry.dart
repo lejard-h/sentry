@@ -10,6 +10,7 @@ import 'package:meta/meta.dart';
 import 'package:quiver/time.dart';
 
 import 'src/base.dart';
+import 'src/version.dart';
 
 export 'src/version.dart';
 export 'src/base.dart';
@@ -70,7 +71,7 @@ class SentryClient extends SentryClientBase {
     final DateTime now = clock.now();
     return <String, String>{
       'Content-Type': 'application/json',
-      'X-Sentry-Auth': 'Sentry sentry_version=6, '
+      'X-Sentry-Auth': 'Sentry sentry_version=$sentryVersion, '
           'sentry_client=${SentryClientBase.sentryClient}, '
           'sentry_timestamp=${now.millisecondsSinceEpoch}, '
           'sentry_key=$publicKey, '
