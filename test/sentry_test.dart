@@ -74,7 +74,9 @@ void main() {
         'Content-Type': 'application/json',
         'X-Sentry-Auth': 'Sentry sentry_version=6, '
             'sentry_client=${SentryClient.sentryClient}, '
-            'sentry_timestamp=${fakeClock.now().millisecondsSinceEpoch}, '
+            'sentry_timestamp=${fakeClock
+            .now()
+            .millisecondsSinceEpoch}, '
             'sentry_key=public, '
             'sentry_secret=secret',
       };

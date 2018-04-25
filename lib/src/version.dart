@@ -16,3 +16,5 @@ const String sdkName = 'dart';
 
 /// The name of the SDK platform reported to Sentry.io in the submitted events.
 const String sdkPlatform = 'dart';
+
+const String jsPlatform = 'javascript';
