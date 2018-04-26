@@ -40,7 +40,6 @@ class SentryBrowserClient extends SentryClientBase {
             environmentAttributes: environmentAttributes,
             httpClient: httpClient ?? new Client(),
             clock: clock ?? const Clock(getUtcDateTime),
-            compressPayload: false,
             platform: jsPlatform,
             origin: '${window.location.origin}/');
 
@@ -67,7 +66,9 @@ class SentryBrowserClient extends SentryClientBase {
   }
 
   @override
-  Map<String, String> get httpHeaders => {};
+  Map<String, String> get httpHeaders => {
+        'Content-Type': 'application/json',
+      };
 
   @override
   String get postUri {
@@ -94,4 +95,7 @@ class SentryBrowserClient extends SentryClientBase {
     });
     return pairs.join('&');
   }
+
+  @override
+  List<int> compressBody(List<int> body) => body;
 }

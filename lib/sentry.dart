@@ -5,6 +5,8 @@
 /// A pure Dart client for Sentry.io crash reporting.
 library sentry;
 
+import 'dart:io';
+
 import 'package:http/http.dart';
 import 'package:meta/meta.dart';
 import 'package:quiver/time.dart';
@@ -17,6 +19,9 @@ export 'src/base.dart';
 
 /// Logs crash reports and events to the Sentry.io service.
 class SentryClient extends SentryClientBase {
+  /// Whether to compress payloads sent to Sentry.io.
+  final bool compressPayload;
+
   String get publicKey => _publicKey;
   String _publicKey;
 
@@ -30,8 +35,8 @@ class SentryClient extends SentryClientBase {
 
   SentryClient(
       {@required String dsn,
+      this.compressPayload: true,
       Event environmentAttributes,
-      bool compressPayload,
       Client httpClient,
       Clock clock,
       UuidGenerator uuidGenerator})
@@ -40,8 +45,7 @@ class SentryClient extends SentryClientBase {
             uuidGenerator: generateUuidV4WithoutDashes,
             environmentAttributes: environmentAttributes,
             httpClient: httpClient ?? new Client(),
-            clock: clock ?? const Clock(getUtcDateTime),
-            compressPayload: compressPayload ?? true);
+            clock: clock ?? const Clock(getUtcDateTime));
 
   @override
   Uri parseDSN(String dsn) {
@@ -70,12 +74,20 @@ class SentryClient extends SentryClientBase {
   Map<String, String> get httpHeaders {
     final DateTime now = clock.now();
     return <String, String>{
-      'Content-Type': 'application/json',
+      'Content-Type': compressPayload ? 'gzip' : 'application/json',
       'X-Sentry-Auth': 'Sentry sentry_version=$sentryVersion, '
           'sentry_client=${SentryClientBase.sentryClient}, '
           'sentry_timestamp=${now.millisecondsSinceEpoch}, '
           'sentry_key=$publicKey, '
           'sentry_secret=$secretKey',
     };
+  }
+
+  @override
+  List<int> compressBody(List<int> body) {
+    if (compressPayload) {
+      return GZIP.encode(body);
+    }
+    return body;
   }
 }

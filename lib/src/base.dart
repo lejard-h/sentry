@@ -7,7 +7,6 @@ library sentry;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart';
 import 'package:meta/meta.dart';
@@ -40,9 +39,6 @@ abstract class SentryClientBase {
   /// Dart/Flutter SDK, etc. These attributes have lower precedence than those
   /// supplied in the even passed to [capture].
   final Event environmentAttributes;
-
-  /// Whether to compress payloads sent to Sentry.io.
-  final bool compressPayload;
 
   /// The DSN URI.
   Uri get dsnUri => _dsnUri;
@@ -89,7 +85,6 @@ abstract class SentryClientBase {
       @required UuidGenerator uuidGenerator,
       @required String dsn,
       @required this.environmentAttributes,
-      @required this.compressPayload,
       this.platform: sdkPlatform,
       this.origin: ''})
       : _httpClient = httpClient,
@@ -118,10 +113,8 @@ abstract class SentryClientBase {
     mergeAttributes(event.toJson(), into: data);
 
     List<int> body = utf8.encode(json.encode(data));
-    if (compressPayload) {
-      headers['Content-Encoding'] = 'gzip';
-      body = GZIP.encode(body);
-    }
+
+    body = compressBody(body);
 
     final Response response =
         await _httpClient.post(postUri, headers: headers, body: body);
@@ -161,6 +154,8 @@ abstract class SentryClientBase {
   Uri parseDSN(String dsn);
 
   Map<String, String> get httpHeaders;
+
+  List<int> compressBody(List<int> body);
 }
 
 /// A response from Sentry.io.
