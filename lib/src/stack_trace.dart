@@ -32,6 +32,7 @@ Map<String, dynamic> encodeStackTraceFrame(Frame frame) {
     'abs_path': _absolutePathForCrashReport(frame),
     'function': frame.member,
     'lineno': frame.line,
+    'colno': frame.column,
     'in_app': !frame.isCore,
   };
 
