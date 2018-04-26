@@ -13,7 +13,8 @@ const Map<String, dynamic> asynchronousGapFrameJson = const <String, dynamic>{
 /// Encodes [stackTrace] as JSON in the Sentry.io format.
 ///
 /// [stackTrace] must be [String] or [StackTrace].
-List<Map<String, dynamic>> encodeStackTrace(dynamic stackTrace) {
+List<Map<String, dynamic>> encodeStackTrace(dynamic stackTrace,
+    {String origin: ''}) {
   assert(stackTrace is String || stackTrace is StackTrace);
   final Chain chain = stackTrace is StackTrace
       ? new Chain.forTrace(stackTrace)
@@ -21,15 +22,16 @@ List<Map<String, dynamic>> encodeStackTrace(dynamic stackTrace) {
 
   final List<Map<String, dynamic>> frames = <Map<String, dynamic>>[];
   for (int t = 0; t < chain.traces.length; t += 1) {
-    frames.addAll(chain.traces[t].frames.map(encodeStackTraceFrame));
+    frames.addAll(chain.traces[t].frames
+        .map((f) => encodeStackTraceFrame(f, origin: origin)));
     if (t < chain.traces.length - 1) frames.add(asynchronousGapFrameJson);
   }
   return frames;
 }
 
-Map<String, dynamic> encodeStackTraceFrame(Frame frame) {
+Map<String, dynamic> encodeStackTraceFrame(Frame frame, {String origin: ''}) {
   final Map<String, dynamic> json = <String, dynamic>{
-    'abs_path': _absolutePathForCrashReport(frame),
+    'abs_path': '$origin${_absolutePathForCrashReport(frame)}',
     'function': frame.member,
     'lineno': frame.line,
     'colno': frame.column,

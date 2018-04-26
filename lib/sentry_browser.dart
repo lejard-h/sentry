@@ -41,7 +41,8 @@ class SentryBrowserClient extends SentryClientBase {
             httpClient: httpClient ?? new Client(),
             clock: clock ?? const Clock(getUtcDateTime),
             compressPayload: false,
-            platform: jsPlatform);
+            platform: jsPlatform,
+            origin: '${window.location.origin}/');
 
   @override
   Uri parseDSN(String dsn) {
@@ -66,8 +67,7 @@ class SentryBrowserClient extends SentryClientBase {
   }
 
   @override
-  Map<String, String> get httpHeaders =>
-      {'User-Agent': window.navigator.userAgent};
+  Map<String, String> get httpHeaders => {};
 
   @override
   String get postUri {

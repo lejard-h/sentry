@@ -28,6 +28,7 @@ abstract class SentryClientBase {
 
   final Client _httpClient;
   final Clock _clock;
+
   Clock get clock => _clock;
   final UuidGenerator _uuidGenerator;
 
@@ -57,6 +58,9 @@ abstract class SentryClientBase {
 
   final String platform;
 
+  /// Use for browser stacktrace
+  final String origin;
+
   /// Instantiates a client using [dsn] issued to your project by Sentry.io as
   /// the endpoint for submitting events.
   ///
@@ -79,15 +83,16 @@ abstract class SentryClientBase {
   /// If [uuidGenerator] is provided, it is used to generate the "event_id"
   /// field instead of the built-in random UUID v4 generator. This is useful in
   /// tests.
-  SentryClientBase({
-    @required Client httpClient,
-    @required Clock clock,
-    @required UuidGenerator uuidGenerator,
-    @required String dsn,
-    @required this.environmentAttributes,
-    @required this.compressPayload,
-    this.platform: sdkPlatform,
-  })  : _httpClient = httpClient,
+  SentryClientBase(
+      {@required Client httpClient,
+      @required Clock clock,
+      @required UuidGenerator uuidGenerator,
+      @required String dsn,
+      @required this.environmentAttributes,
+      @required this.compressPayload,
+      this.platform: sdkPlatform,
+      this.origin: ''})
+      : _httpClient = httpClient,
         _clock = clock,
         _uuidGenerator = uuidGenerator {
     _dsnUri = parseDSN(dsn);
@@ -119,7 +124,7 @@ abstract class SentryClientBase {
     }
 
     final Response response =
-    await _httpClient.post(postUri, headers: headers, body: body);
+        await _httpClient.post(postUri, headers: headers, body: body);
 
     if (response.statusCode != 200) {
       String errorMessage =
@@ -139,7 +144,10 @@ abstract class SentryClientBase {
     dynamic stackTrace,
   }) {
     final Event event = new Event(
-        exception: exception, stackTrace: stackTrace, platform: platform);
+        exception: exception,
+        stackTrace: stackTrace,
+        platform: platform,
+        origin: origin);
     return capture(event: event);
   }
 
@@ -216,18 +224,19 @@ class Event {
   /// Creates an event.
   const Event(
       {this.loggerName,
-        this.serverName,
-        this.release,
-        this.environment,
-        this.message,
-        this.exception,
-        this.stackTrace,
-        this.level,
-        this.culprit,
-        this.tags,
-        this.extra,
-        this.fingerprint,
-        this.platform});
+      this.serverName,
+      this.release,
+      this.environment,
+      this.message,
+      this.exception,
+      this.stackTrace,
+      this.level,
+      this.culprit,
+      this.tags,
+      this.extra,
+      this.fingerprint,
+      this.platform,
+      this.origin: ''});
 
   /// The logger that logged the event.
   final String loggerName;
@@ -288,8 +297,11 @@ class Event {
   ///     var supplemented = [Event.defaultFingerprint, 'foo'];
   final List<String> fingerprint;
 
-  /// 'dart' of 'javascript'
+  /// 'dart' or 'javascript'
   final String platform;
+
+  /// Use for browser stacktrace
+  final String origin;
 
   /// Serializes this event to JSON.
   Map<String, dynamic> toJson() {
@@ -322,7 +334,7 @@ class Event {
 
     if (stackTrace != null) {
       json['stacktrace'] = <String, dynamic>{
-        'frames': encodeStackTrace(stackTrace),
+        'frames': encodeStackTrace(stackTrace, origin: origin),
       };
     }
 
